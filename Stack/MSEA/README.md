@@ -21,7 +21,7 @@ int mprotect(void *addr, size_t len, int prot);
 `mprotect` cần 3 registers thiết yếu `RDI`, `RSI`, `RDX`. Nếu chúng ta có quyền kiểm soát 3 registers này thì ta có thể sử dụng `mprotect`, để cho stack có quyền `execute`. Nhưng còn có một cách nữa là ta chỉ cần sử kiểm soát đúng RDI, là ta có thể sử dụng được `mprotect`
 ### nptl_change_stack_perm
 
-
+<Updating ...>
 
 ## PoC
 
