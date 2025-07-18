@@ -53,7 +53,7 @@ In the Linux kernel, the heap is shared by all drivers and the kernel itself. Th
 
 ### Build a kernel for WSL
 
-Let's say you ưant to build a kernel for WSL for your own use. You can follow the steps below:
+Let's say you want to build a kernel for WSL for your own use. You can follow the steps below:
 
 1. **Install the necessary tools:**
    Make sure you have the required packages installed to build the kernel. You can install them using:
