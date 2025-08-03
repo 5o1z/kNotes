@@ -1,12 +1,13 @@
 ## Table of Contents
 
-- [Overview: prepare_kernel_cred and commit_creds](#overview-prepare_kernel_cred-and-commit_creds)
+- [Overview](#overview)
     - [prepare_kernel_cred and commit_creds](#prepare_kernel_cred-and-commit_creds)
     - [Return to userspace](#return-to-userspace)
 - [Exploit: ret2usr](#exploit-ret2usr-no-smep-no-smap-no-kpti-no-kaslr)
 - [Exploit: kROP](#exploit-kROP-bypass-smep-smap-with-no-kpti-no-kaslr)
 - [Exploit: KPTI](#exploit-kpti-with-smeps-smap-and-no-aslr)
     - [Bypass KPTI with Trampoline](#bypass-kpti-with-trampoline)
+- [Avoiding KASLR](#avoiding-kaslr)
 - [References](#references)
 
 ## Overview
@@ -408,8 +409,6 @@ So when we run our ROP exploit above, it will `Segment fault`. This is because e
 
 - Bypass KPTI with Trampoline
 - Bypass KPTI with Signal Handler
-- Bypass KPTI with User Mode Helpers
-- Bypass KPTI with coredump
 
 ### Bypass KPTI with Trampoline
 
@@ -457,9 +456,9 @@ So we can use the piece of code in this function, to return to user mode. Let's 
 ffffffff81800e10 T swapgs_restore_regs_and_return_to_usermode
 ```
 
-![alt text](image.png)
+![alt text](./kpti/assets/image.png)
 
-![alt text](image-1.png)
+![alt text](./kpti/assets/image-1.png)
 
 The key point is that the stack was pre-adjusted to point to the correct location. The subsequent pushes are copying the user-space register values — originally stored on the kernel stack and meant for iretq — to a memory area that remains accessible even after the CR3 switch triggered by KPTI. So our complete KPTI Trampoline chain is started at `0xffffffff81800e26`
 
@@ -490,6 +489,59 @@ The key point is that the stack was pre-adjusted to point to the correct locatio
 ```
 
 Here is my full [exploit code](./kpti/exploit_kpti_trampoline.c) for this technique.
+
+### Bypass KPTI with Signal Handler
+
+So let's talk a little bit about kernel signal. Kernel signals are software interrupts that are delivered to processes. These signals are triggered by various events like user input (pressing CTRL+C), hardware exceptions (memory saturation, divide by 0), and software events (timeouts). When a signal is generated, the kernel will interrupt the normal flow of execution of a particular process and handle the signal according to the signal disposition. There are three types of signal dispositions:
+
+- **Ignore Signal:** The process will ignore the signal and continue executing as if nothing happened.
+- **Catch Signal:** The process will execute a user-defined signal handler function to handle the signal.
+- **Terminate Signal:** The process will terminate and return an exit code to the kernel (e.g SIGSEGV, SIGKILL).
+
+And there are different types of signals, according to this [article](https://blog.yarsalabs.com/understanding-kernel-signals/) we have:
+
+- **SIGHUP (Signal Hang Up):** The signal SIGHUP is sent when a controlling terminal or process is terminated. It's often used for restarting/reloading configuration files for long-running processes.
+- **SIGINT (Signal Interrupt):** The signal SIGINT is sent when a user process CTRL+C to interrupt running processes.
+- **SIGQUIT (Signal Quit):** The signal SIGQUIT is sent when a user presses CTRL+\ and is used to terminate a process and provide a core dump for debugging purposes.
+- **SIGKILL (Signal Kill):** This is the signal for Hard Kill, a process that can be forcibly terminated by using this signal. It can neither be caught nor ignored.
+- **SIGTERM (Signal Terminate):** This signal is sent to request a process to terminate itself gracefully. It's recommended to always use SIGTERM before resorting to SIGKILL. SIGTERM allows a process to close itself and handle temp files, etc, that it has created, SIGKILL will kill the process without giving it time to clean up.
+- **SIGSEGV (Signal Segmentation Violation):** This signal is raised when a process tries to access a memory location that is forbidden for access. It indicates a memory segmentation fault.
+- **SIGCHLD (Signal Child):** This signal is sent to a parent process when one of its child processes terminates or stops.
+- **SIGALRM (Signal Alarm):** The Signal SIGALRM can schedule timers to execute certain functions after a specified time interval.
+- **SIGTRAP (Signal Trap):** The Signal SIGTRAP can be used to Trap running processes. It's useful for debugging a fault process.
+- **SIGSTOP (Signal Stop):** The Signal SIGSTOP can be used to Stop running processes. It's useful for debugging a fault process.
+
+You can read [here](https://www.man7.org/linux/man-pages/man7/signal.7.html) for more information about signals. So how can we use signals to bypass KPTI? We all know that our exploit in [#Exploit: kROP](#exploit-krop-bypass-smep-smap-with-no-kpti-no-kaslr) will cause a SIGSEGV when we try to execute it in KPTI enabled kernel. And note that the segmentation fault (SIGSEGV) is just a userland thing, not from kernel. So what can stop us from registering a signal handler for SIGSEGV and will call `get_shell()` function when it is triggered?
+
+```c
+#include <signal.h>
+
+struct sigaction sigact;
+void register_sigsegv()
+{
+    logInfo("Registering SIGSEGV handler");
+    sigact.sa_handler = get_shell;
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_flags = 0;
+    sigaction(SIGSEGV, &sigact, (struct sigaction *)NULL);
+}
+```
+
+And here is my full [exploit](./kpti/exploit_signal_handler.c) code for this technique.
+
+## Avoiding KASLR
+
+So in the case the kASLR is enabled, we first need to find a way to leak it. The overflow bug also in `module_read` function. So we can use that to leak the kernel address that available after the save RIP
+
+```c
+    char buf[0x500];
+    memset(buf, 'A', 0x480);
+    read(fd, buf, 0x410);
+    uint64_t leaked_address = *(uint64_t *)&buf[0x408];
+    uint64_t kbase = leaked_address - 0x13d33c; // 0xffffffff8113d33c-0xffffffff81000000 = 0x13d33c
+```
+
+Everything is the same as previous exploit, but we need to `kbase + offset` to get the real address of the functions and gadgets we need for the ROP chain. So here is the full [exploit code](./kaslr/exploit.c).
 
 ## References
 
