@@ -7,7 +7,9 @@
 - [Exploit: kROP](#exploit-kROP-bypass-smep-smap-with-no-kpti-no-kaslr)
 - [Exploit: KPTI](#exploit-kpti-with-smeps-smap-and-no-aslr)
     - [Bypass KPTI with Trampoline](#bypass-kpti-with-trampoline)
+    - [Bypass KPTI with Signal Handler](#bypass-kpti-with-signal-handler)
 - [Avoiding KASLR](#avoiding-kaslr)
+- [Bonus](#bonus)
 - [References](#references)
 
 ## Overview
@@ -531,7 +533,7 @@ And here is my full [exploit](./kpti/exploit_signal_handler.c) code for this tec
 
 ## Avoiding KASLR
 
-So in the case the kASLR is enabled, we first need to find a way to leak it. The overflow bug also in `module_read` function. So we can use that to leak the kernel address that available after the save RIP
+So in the case the kASLR is enabled, we first need to find a way to leak it. The kernel has 1 GB of address space from `0xffffffff80000000 to 0xffffffffc0000000`. Therefore, even if KASLR is enabled, only 0x3f0 or so base addresses will be generated from 0x810 to 0xc00. However, the overflow bug also in `module_read` function. So we can use that to leak the kernel address that available after the save RIP
 
 ```c
     char buf[0x500];
@@ -543,6 +545,93 @@ So in the case the kASLR is enabled, we first need to find a way to leak it. The
 
 Everything is the same as previous exploit, but we need to `kbase + offset` to get the real address of the functions and gadgets we need for the ROP chain. So here is the full [exploit code](./kaslr/exploit.c).
 
+## Bonus
+
+### Question 1
+
+```
+Is it possible to use only the stack overflow vulnerability of practice LK01, and to use the following combinations of security mechanisms to escalate privileges using only ret2user without ROP? Write exploit if possible, and explain why if not.
+(1) SMAP disabled / SMEP disabled / KPTI enabled
+(2) SMAP enabled / SMEP disabled / KPTI disabled
+```
+
+(1) - No, it is not possible to escalate privileges using only ret2user without ROP in this case. The reason is that when KPTI is enabled, the kernel will switch to a different page table so it marks the userspace pages as non-accessible. This means that even if we try to overwrite the saved RIP to point to a userspace function, the kernel will not allow us to execute it because it can't access the userspace memory. So we cannot execute the userspace code from kernel space.
+
+(2) - No, same as above, the userspace code will be marked as non-accessible by SMAP, this due to non-executable
+
+### Question 2
+
+```
+As seen in the Security Mechanism section, SMEP is controlled by the 21st bit of the CR4 register. Can I disable SMEP by setting the 21st bit of the CR4 register to 0 with kROP and escalate privileges using ret2user? Write exploit if possible, and explain why if not.
+```
+
+So to turn off SMEP, we can use the function name `native_write_cr4`
+
+```c
+static inline void native_write_cr4(unsigned long val)
+{
+	asm volatile("mov %0,%%cr4": : "r" (val), "m" (__force_order));
+}
+```
+
+This function will write the value of `val` to the CR4 register. So we can use ROP to call this function and pass the new value of CR4 register to it. For examble this is the value of CR4 register when SMEP is disabled:
+
+```gdb
+pwndbg> i r cr4
+cr4            0x6f0               [ OSXMMEXCPT OSFXSR PGE MCE PAE PSE ]
+```
+
+And this is the value of CR4 register when SMEP is enabled:
+
+```gdb
+pwndbg> i r cr4
+cr4            0x1006f0            [ SMEP OSXMMEXCPT OSFXSR PGE MCE PAE PSE ]
+```
+
+So we see that the value `0x100000` is the value of the 20th bit of the CR4 register, which is the SMEP bit. So we can use ROP to call `native_write_cr4` and pass the value `0x6f0` to it to disable SMEP. The ROP chain will look like this:
+
+```c
+    rop[idx++] = pop_rdi; // return address
+    rop[idx++] = 0;
+    rop[idx++] = native_write_cr4; // Call native_write_cr4
+    rop[idx++] = (unsigned long)&escalate_privilege; // Set rcx to 0 to avoid
+```
+
+However, in the [high version kernel](https://elixir.bootlin.com/linux/v5.15.187/source/arch/x86/kernel/cpu/common.c#L388-L405), the 20th and 21st bits of CR4 are pinned on boot, and will immediately be set again after being cleared, so they can never be overwritten this way anymore 🥲
+
+### Question 3
+
+```
+When SMAP, SMEP, KPTI is disabled and KASLR is enabled, use Stack Overflow vulnerabilities only (i.e., not using read) to escalate privileges.
+Tip: Check the register value at the moment you run the shellcode with ret2usr.
+```
+
+So at the time we use `module_read` to read the buffer in kstack to our buffer, the value at `rbp` when we about to return in still the kernel's
+
+![alt text](./bonus/assets/image.png)
+
+So just take the value at `rbp+0x8` and then calculate the base address of the kernel, we can get the address of `prepare_kernel_cred` and `commit_creds` functions. And the other stuff is the same as `ret2usr` exploit. So [here](./bonus/exploit_question3.c) is my exploit code for this question. But one trouble when I compile my exploit code with `clang` is
+
+```sh
+BUG: unable to handle page fault for address: fffffffffff30e7d
+#PF: supervisor instruction fetch in kernel mode
+#PF: error_code(0x0010) - not-present page
+```
+
+But `gcc` works fine. This is because we pass a wrong address of the shellcode in the `saved RIP`.
+
+- This is for `clang`:
+
+![alt text](./bonus/assets/image-1.png)
+
+- This is for `gcc`:
+
+![alt text](./bonus/assets/image-2.png)
+
+As we can see there are 2 different addresses of the shellcode, although we use the same code `*(uint64_t *)&buf[0x408] = (uint64_t)&shellcode + 8;`. Is this because my code is so bad? No, this is because the `clang` compiler isn't add the `endbr64` instruction at the start of each function, in `clang` this is an option that you can enable by using `-fcf-protection=branch`. However, in `gcc`, this is enabled by default. So that if you use `clang` to compile your exploit code, just change to `+4` instead of `+8` in the line `*(uint64_t *)&buf[0x408] = (uint64_t)&shellcode + 4;` to make it work. Or just use the option `-fcf-protection=branch`
+
+If you curious about the `endbr64` instruction, you can read more about it [here](https://stackoverflow.com/questions/56905811/what-does-the-endbr64-instruction-actually-do).
+
 ## References
 
 - https://www.felixcloutier.com/x86/iret:iretd:iretq
@@ -550,3 +639,4 @@ Everything is the same as previous exploit, but we need to `kbase + offset` to g
 - https://blog.wohin.me/posts/linux-kernel-pwn-01/
 - https://0x434b.dev/dabbling-with-linux-kernel-exploitation-ctf-challenges-to-learn-the-ROPes/
 - https://breaking-bits.gitbook.io/breaking-bits/exploit-development/linux-kernel-exploit-development
+- https://lkmidas.github.io/posts/20210128-linux-kernel-pwn-part-2
