@@ -1,10 +1,13 @@
 ## forward consolidation
 
 **Purpose:** We can have two separate chunks allocated to the same space
+
 **Require:** Have an ability to change the metadata of the allocated chunks
+
 **Mitigations need to bypass:** The malloc consolidates 2 chunks using `malloc_consolidate` function, but before consolidate them, malloc must unlink (use `unlink_chunk`) first. And there are two mitigations inside the `unlink_chunk` that we need to bypass
-- [prev_size](https://elixir.bootlin.com/glibc/glibc-2.39/source/malloc/malloc.c#L1610-L1611)
-- [fd/bk](https://elixir.bootlin.com/glibc/glibc-2.39/source/malloc/malloc.c#L1616-L1617)
+
+    - [prev_size](https://elixir.bootlin.com/glibc/glibc-2.39/source/malloc/malloc.c#L1610-L1611)
+    - [fd/bk](https://elixir.bootlin.com/glibc/glibc-2.39/source/malloc/malloc.c#L1616-L1617)
 
 ## POC
 
