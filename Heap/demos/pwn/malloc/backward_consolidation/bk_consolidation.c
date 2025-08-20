@@ -8,11 +8,11 @@ int main()
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
-    long *consolidated_chunk, *victim, *chunk;
+    long *consolidated_chunk, *victim, *guard;
 
     consolidated_chunk = malloc(0x80);
     victim = malloc(0x410);
-    chunk = malloc(0x10); // Avoid top-chunk consolidate
+    guard = malloc(0x10); // Avoid top-chunk consolidate
 
     /* Setup victim prev_size & size fields */
     victim[-2] = 0x90;

