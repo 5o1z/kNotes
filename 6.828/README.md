@@ -413,3 +413,231 @@ Idx Name          Size      VMA       LMA       File off  Algn
 ```
 
 </details>
+
+### Part 3: The Kernel
+
+#### Using virtual memory to work around position dependence
+
+Unlike boot load, the link address and load address are different for kernel. OS kernel often like to be linked and run at high virtual address (VA), e.g. 0xf0100000, in order to leave the lower part of processor's VA space for user programs to use.
+
+But many machines don't have any physical memory at that high address. So memory management unit (MMU) is employed to map virtual address 0xf0100000 (VMA) to physical address 0x00100000 (LMA).
+
+For now, we just map the first 4MB of physical memory by using the statically-initialized page directory and page table in `kern/entrypgdir.c`. Once the `CR0_PG` is set in the `kern/entry.S`, memory references are `VAs`. Before that, they are physical addresses. `entry_pgdir` in the `kern/entrypgdir.c` translates the VA in the ranges of `[0x00000000, 0x00400000]` and `[0xf0000000, 0xf0400000]` to physical address `[0x00000000, 0x00400000]`. Access to the VA not in the two ranges will cause a hardware exception.
+
+<details>
+<summary><strong>Exercise 7</strong></summary>
+
+> Use QEMU and GDB to trace into the JOS kernel and stop at the movl %eax, %cr0. Examine memory at 0x00100000 and at 0xf0100000. Now, single step over that instruction and examine memory at 0x00100000 and at 0xf0100000 again.
+
+View the file `obj/kern/kernel.asm` we know that our instruction is place at `0x00100025` before the VA is turned on:
+
+```gdb
+(gdb) b *0x100025
+Breakpoint 1 at 0x100025
+(gdb) c
+Continuing.
+The target architecture is set to "i386".
+=> 0x100025:    mov    cr0,eax
+```
+
+Check the memory at `0x00100000` and `0xf0100000`:
+
+```gdb
+(gdb) x/10w 0x00100000
+0x100000:       0x1badb002      0x00000000      0xe4524ffe      0x7205c766
+0x100010:       0x34000004      0x1000b812      0x220f0011      0xc0200fd8
+0x100020:       0x0100010d      0xc0220f80
+(gdb) x/10w 0xf0100000
+0xf0100000 <_start-268435468>:  Cannot access memory at address 0xf0100000
+```
+
+After turn on paging:
+
+```gdb
+(gdb) si
+=> 0x100028:    mov    eax,0xf010002f
+(gdb) x/10w 0xf0100000
+0xf0100000 <_start-268435468>:  0x1badb002      0x00000000      0xe4524ffe      0x7205c766
+0xf0100010 <entry+4>:   0x34000004      0x1000b812      0x220f0011      0xc0200fd8
+0xf0100020 <entry+20>:  0x0100010d      0xc0220f80
+(gdb) x/10w 0x00100000
+0x100000:       0x1badb002      0x00000000      0xe4524ffe      0x7205c766
+0x100010:       0x34000004      0x1000b812      0x220f0011      0xc0200fd8
+0x100020:       0x0100010d      0xc0220f80
+```
+
+As we can see, after the paging is turned on, the memory at `0xf0100000` is now accessible and contains the same data as the memory at `0x00100000`. This is because the page directory and page table map the virtual address `0xf0100000` to the physical address `0x00100000`, allowing us to access the kernel code at a high virtual address while it is actually loaded at a lower physical address. And those instructions at `0xf0100000` are the same as those at `0x00100000`, which is the kernel code.
+
+```gdb
+(gdb) x/11i 0xf0100000
+   0xf0100000 <_start-268435468>:       add    dh,BYTE PTR [eax+0x1bad]
+   0xf0100006 <_start-268435462>:       add    BYTE PTR [eax],al
+   0xf0100008 <_start-268435460>:       dec    BYTE PTR [edi+0x52]
+   0xf010000b <_start-268435457>:       in     al,0x66
+   0xf010000d <entry+1>:        mov    DWORD PTR ds:0x472,0xb81234
+   0xf0100017 <entry+11>:       adc    BYTE PTR [ecx],dl
+   0xf0100019 <entry+13>:       add    BYTE PTR [edi],cl
+   0xf010001b <entry+15>:       and    bl,al
+   0xf010001d <entry+17>:       mov    eax,cr0
+   0xf0100020 <entry+20>:       or     eax,0x80010001
+   0xf0100025 <entry+25>:       mov    cr0,eax
+(gdb) x/11i 0x00100000
+   0x100000:    add    dh,BYTE PTR [eax+0x1bad]
+   0x100006:    add    BYTE PTR [eax],al
+   0x100008:    dec    BYTE PTR [edi+0x52]
+   0x10000b:    in     al,0x66
+   0x10000d:    mov    DWORD PTR ds:0x472,0xb81234
+   0x100017:    adc    BYTE PTR [ecx],dl
+   0x100019:    add    BYTE PTR [edi],cl
+   0x10001b:    and    bl,al
+   0x10001d:    mov    eax,cr0
+   0x100020:    or     eax,0x80010001
+   0x100025:    mov    cr0,eax
+```
+
+> What is the first instruction after the new mapping is established that would fail to work properly if the mapping weren't in place? Comment out the movl %eax, %cr0 in kern/entry.S, trace into it, and see if you were right.
+
+```gdb
+(gdb) b *0x0100020
+Breakpoint 1 at 0x100020
+(gdb) c
+Continuing.
+The target architecture is set to "i386".
+=> 0x100020:    or     $0x80010001,%eax
+
+Breakpoint 1, 0x00100020 in ?? ()
+(gdb) x/2i
+   0x100025:    mov    $0xf010002c,%eax
+   0x10002a:    jmp    *%eax
+(gdb) si
+=> 0x100025:    mov    $0xf010002c,%eax
+0x00100025 in ?? ()
+(gdb)
+=> 0x10002a:    jmp    *%eax
+0x0010002a in ?? ()
+(gdb)
+=> 0xf010002c <relocated>:      Error while running hook_stop:
+Cannot access memory at address 0xf010002c
+relocated () at kern/entry.S:74
+74              movl    $0x0,%ebp                       # nuke frame pointer
+```
+
+So the first instruction fail if we comment out the turn on paging is the `movl    $0x0,%ebp`. The reason why it fails is that the prior instruction made us jump to address 0xf010002c. Because paging is not enabled, this address is interpeted as a physical address, and since there is no RAM inside of it, qemu crashes. Indeed if we look at the qemu output, we see: `fatal: Trying to execute code outside RAM or ROM at 0xf010002c`
+
+</details>
+
+#### Formatted Printing to the Console
+
+<details>
+<summary><strong>Exercise 8</strong></summary>
+
+0. We have omitted a small fragment of code - the code necessary to print octal numbers using patterns of the form "%o". Find and fill in this code fragment.
+
+    > ```c
+    > // (unsigned) octal
+    > case 'o':
+    >       num = getuint(&ap, lflag); // Get the number
+    >       base = 8; // Set base to octal
+    >       goto number;
+    > ```
+    > With this addition, we will recive the message: `6828 decimal is 15254 octal!` when we run the `qemu` after recompiling. This message is come from `cprintf("6828 decimal is %o octal!\n", 6828);` in >`i386_init()`
+
+1. Explain the interface between printf.c and console.c. Specifically, what function does console.c export? How is this function used by printf.c?
+    > `console.c` exports the function `cputchar(int c)`, which is a low level routine puts a character in the serial port, the parallel port, and in the CGA buffer, which appears on the screen. `printf.c` uses this function to output characters when formatting strings, integers, and other data types. `printf.c` has a function putch(int ch, int* cnt) that uses this cputchar function exposed by console.c. It is worth mentioning that the useful function cprintf actually passes putch to vprintfmt which accepts a "generic function that prints a character".
+
+2. Explain the following code from console.c.
+
+    >```c
+    >    // If screen is full, scroll down CRT_COLS characters
+    >    if (crt_pos >= CRT_SIZE) {
+    >            int i;
+    >            // Push out CRT_COLS of data from the beginning of the display buffer
+    >            memmove(crt_buf, crt_buf + CRT_COLS, (CRT_SIZE - CRT_COLS) * sizeof(uint16_t));
+    >            // Erase the previous characters at the end
+    >            for (i = CRT_SIZE - CRT_COLS; i < CRT_SIZE; i++)
+    >                    crt_buf[i] = 0x0700 | ' ';
+    >            // Move position back to the current end
+    >            crt_pos -= CRT_COLS;
+    >    }
+    >```
+    > Read [this](https://github.com/Babtsov/jos/tree/master/lab1#be-able-to-answer-the-following-questions) for more explaination
+
+3. In the call to cprintf(), to what does fmt point? To what does ap point?
+
+> So first we need to put these code in `kern/init.c` inside the `i386_init()` function:
+>
+> ```c
+>     cons_init();
+>
+>     cprintf("6828 decimal is %o octal!\n", 6828);
+>
+>     /* QUESTION 3 CODE START */
+>     int x = 1, y = 3, z = 4;
+>     cprintf("x %d, y %x, z %d\n", x, y, z);
+>     /* QESTION 3 CODE END*/
+> ```
+>
+> Recompile the kernel and debug it with gdb, remember to set the breakpoint at the call `cprintf`, in my case it is at `f01000e8`:
+>
+> ```gdb
+> (gdb) b *0xf01000e8
+> Breakpoint 1 at 0xf01000e8: file kern/init.c, line 40.
+> (gdb) c
+> Continuing.
+> The target architecture is set to "i386".
+> => 0xf01000e8 <i386_init+66>:   push   $0x4
+>
+> Breakpoint 1, i386_init () at kern/init.c:40
+> 40          cprintf("x %d, y %x, z %d\n", x, y, z);
+> (gdb) x/5i
+>    0xf01000ea <i386_init+68>:   push   $0x3
+>    0xf01000ec <i386_init+70>:   push   $0x1
+>    0xf01000ee <i386_init+72>:   lea    -0xe876(%ebx),%eax
+>    0xf01000f4 <i386_init+78>:   push   %eax
+>    0xf01000f5 <i386_init+79>:   call   0xf0100a49 <cprintf>
+> ```
+>
+> Set another breakpoint at `0xf0100a56` which is the call to `vcprintfmt`:
+>
+> ```gdb
+> (gdb) b *0xf0100a56
+> Breakpoint 2 at 0xf0100a56: file kern/printf.c, line 32.
+> (gdb) c
+> Continuing.
+> => 0xf0100a56 <cprintf+13>:     call   0xf0100a12 <vcprintf>
+>
+> Breakpoint 2, 0xf0100a56 in cprintf (fmt=0xf0101a92 "x %d, y %x, z %d\n") at kern/printf.c:32
+> 32              cnt = vcprintf(fmt, ap);
+> (gdb) si
+> => 0xf0100a12 <vcprintf>:       push   %ebp
+> vcprintf (fmt=0xf0101a92 "x %d, y %x, z %d\n", ap=0xf010efd4 "\001") at kern/printf.c:18
+> (gdb) x/12w 0xf010efa8 # 0xf010efa8 is the address pointed by esp
+> 0xf010efa8:     0xf010efc8      0xf0100a5b      0xf0101a92      0xf010efd4
+> 0xf010efb8:     0xf010efd8      0xf0100a5b      0xf0101a77      0xf010efe4
+> 0xf010efc8:     0xf010eff8      0xf01000fa      0xf0101a92      0x00000001
+> (gdb) x/s 0xf0101a92
+> 0xf0101a92:     "x %d, y %x, z %d\n"
+> (gdb) x/s 0xf010efd4
+> 0xf010efd4:     "\001"
+> (gdb) x/s 0xf010efd8
+> 0xf010efd8:     "\003"
+> (gdb) x/s 0xf010efd8+0x4
+> 0xf010efdc:     "\004"
+> ```
+>
+> After stepping into `vcprintf`, we can see that `fmt` points to the string "x %d, y %x, z %d\n" (`0xf0101a92`) and`ap` points to the stack location (`0xf010efd4`) where the arguments are stored. The`ap` is a pointer to the argument list, which is used to access the variable arguments passed to the function.
+
+</details>
+
+<details>
+<summary><strong>Challenge: Enhance the console</strong></summary>
+
+> ```c
+> /* kern/init.c - i386_init() */
+> /* 0 (all off), 1 (bold), 4 (underscore), 31 (red foreground), 43 (yellow background) */
+> cprintf("Lab1-Ch: \033[1;4;31;43mHello colorful world! \033[0m\n");
+> ```
+
+</details>
+
+
