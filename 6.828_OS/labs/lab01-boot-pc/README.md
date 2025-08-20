@@ -834,3 +834,4 @@ The complete code of `mon_backtrace` is at [`kern/monitor.c`](kern/monitor.c#L58
 - Linker documentation: <http://www.scoberlin.de/content/media/http/informatik/gcc_docs/ld_3.html>
 - Stabs doumentation: <https://sourceware.org/gdb/current/onlinedocs/stabs.html#Symbol-Tables>
 - More info about stabs from ibm: <https://www.ibm.com/developerworks/library/os-debugging/index.html>
+- About ELF format: <https://pdos.csail.mit.edu/6.828/2018/readings/elf.pdf>
