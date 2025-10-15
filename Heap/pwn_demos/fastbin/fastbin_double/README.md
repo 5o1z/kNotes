@@ -4,7 +4,7 @@
 
 **Require:** Have an ability to free the same chunk twice (double free)
 
-## POC
+## PoC
 
 ```c
 #include <stdio.h>

@@ -2,7 +2,7 @@
 
 All information can be found [here](https://github.com/lieuhoaisa/CTFnotes/tree/main/heap/primitives/fastbin/fastbin_fake_chunk)
 
-## POC
+## PoC
 
 ```c
 #include <stdio.h>

@@ -4,7 +4,7 @@
 
 **Require:** Have an ability to change the metadata of the allocated chunks
 
-## POC
+## PoC
 
 ```c
 #include <stdio.h>

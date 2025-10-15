@@ -2,7 +2,7 @@
 
 Like `tcache poisoning`. Due to a few differences, this isn't going to be as practical and useful as the tcache linked list technique.
 
-## POC
+## PoC
 
 ```c
 #include <stdio.h>

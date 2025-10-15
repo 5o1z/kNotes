@@ -9,7 +9,7 @@
 - [prev_size](https://elixir.bootlin.com/glibc/glibc-2.39/source/malloc/malloc.c#L1610-L1611)
 - [fd/bk](https://elixir.bootlin.com/glibc/glibc-2.39/source/malloc/malloc.c#L1616-L1617)
 
-## POC
+## PoC
 
 ```c
 #include <stdio.h>
