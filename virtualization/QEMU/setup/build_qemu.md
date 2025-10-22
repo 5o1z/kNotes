@@ -39,9 +39,13 @@ make -j$(nproc)
 ```
 
 > `--enable-debug`: enable debug symbols, assertions, and debug information.
+>
 > `--enable-trace-backends=log`: enable QEMU trace backend that writes trace events to a log file.
+>
 > `--extra-cflags="-O0 -g3"`: compile with no optimizations and with maximum debug info (-O0 disables optimizations; -g3 includes full debugging symbols).
+>
 > `--disable-strip`: do not strip symbols from the binaries (keeps symbol names in the executable).
+>
 > `--extra-ldflags="-rdynamic"`: pass `-rdynamic` to the linker so dynamic symbols are exported, making it easier for `gdb` and `addr2line` to resolve symbols.
 
 ## References
