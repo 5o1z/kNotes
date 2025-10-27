@@ -102,7 +102,7 @@ Physical memory    |    |                                               ||
                    +----+-----------------------------------------------++
 ```
 
-### QEMU Device: Structures & Functions in Use
+### Structures and functions used by QEMU devices
 
 A device goes through these phases:
 
@@ -973,4 +973,5 @@ static const MemoryRegionOps apic_io_ops = {
 ### Reference
 
 https://github.com/u1f383/writeup/blob/main/learning/Qemu.md
+
 
