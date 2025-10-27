@@ -2,7 +2,7 @@
 
 ```bash
 # Install dependencies
-sudo apt-get update
+sudo apt update
 sudo pip3 install ninja
 sudo apt install libglib2.0-dev libgcrypt20-dev zlib1g-dev autoconf automake libtool bison flex libpixman-1-dev
 
@@ -973,3 +973,4 @@ static const MemoryRegionOps apic_io_ops = {
 ### Reference
 
 https://github.com/u1f383/writeup/blob/main/learning/Qemu.md
+
