@@ -85,7 +85,7 @@ Physical memory    |    |                                               ||
                    +----+-----------------------------------------------++
 ```
 
-### QEMU Device: Structures & Functions in Use
+### Structures and functions used by QEMU devices
 
 A device goes through these phases:
 
@@ -461,8 +461,8 @@ static void object_initialize_with_type(Object *obj, size_t size, TypeImpl *type
 *
 * # Realization #
 * Devices are constructed in two stages,
-* 1) object instantiation (實例化) via object_initialize() and
-* 2) device realization (實現) via #DeviceState:realized property.
+* 1) object instantiation via object_initialize() and
+* 2) device realization via #DeviceState:realized property.
 * The former may not fail (and must not abort or exit, since it is called
 * during device introspection already), and the latter may return error
 * information to the caller and must be re-entrant.
@@ -956,3 +956,9 @@ static const MemoryRegionOps apic_io_ops = {
 ### Reference
 
 https://github.com/u1f383/writeup/blob/main/learning/Qemu.md
+<<<<<<< HEAD
+=======
+
+
+
+>>>>>>> 3a7ead045f64061e9f3e7afcc6477fc2641fc28f
