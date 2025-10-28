@@ -16,30 +16,13 @@ cd qemu-8.0.2
 make -j$(nproc)
 ```
 
-### Some useful QEMU learning resources
-
-- QEMU Basic conepts: https://hackmd.io/@Broder/qemu
-- QEMU Internal:
-    - https://blog.vmsplice.net/search?q=QEMU+Internals
-    - https://airbus-seclab.github.io/qemu_blog/
-- Custom PCI Device:
-    - https://www.youtube.com/watch?v=MTUuymrutNw
-    - https://sebastienbourdelin.com/2021/06/16/writing-a-custom-device-for-qemu/
-- MMIO: https://terenceli.github.io/%E6%8A%80%E6%9C%AF/2018/09/03/kvm-mmio
-- Port IO: https://terenceli.github.io/技术/2017/07/10/kvm-pio
-- Others:
-    - https://github.com/u1f383/writeup/blob/main/learning/Qemu.md
-    - https://phrack.org/issues/70/5
-    - https://richardweiyang-2.gitbook.io/understanding_qemu/
-    - Intel Manuals: https://github.com/ayoubfaouzi/cpu-internals (Important! Must read for virtualization!)
-
 ### Nouns
 
 - **Memory Mapped I/O (MMIO):** A method used by computers to perform input/output (I/O) operations by mapping device registers into the system's address space. This allows the CPU to communicate with hardware devices using standard memory access instructions.
 
 - **Port-Mapped I/O (PMIO):** Also known as isolated I/O, it is a method of performing input/output operations using a separate address space specifically designated for I/O devices. This allows the CPU to communicate with hardware devices using special I/O instructions.
 
-- **VirtIO:** A virtualization standard for network and disk device drivers where the guest's device driver "knows" it is running in a virtual environment, and cooperates with the hypervisor. Note in [./VirtIO.md](./VirtIO.md).
+- **VirtIO:** A virtualization standard for network and disk device drivers where the guest's device driver "knows" it is running in a virtual environment, and cooperates with the hypervisor. Note in [VirtIO.md](./VirtIO.md).
 
 - **Direct Memory Access (DMA):** A feature that allows hardware devices to access the main system memory (RAM) directly, bypassing the CPU. This enables faster data transfer rates and reduces CPU overhead, improving overall system performance.
 
@@ -973,4 +956,3 @@ static const MemoryRegionOps apic_io_ops = {
 ### Reference
 
 https://github.com/u1f383/writeup/blob/main/learning/Qemu.md
-
