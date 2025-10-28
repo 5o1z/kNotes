@@ -9,7 +9,7 @@
   - <https://sebastienbourdelin.com/2021/06/16/writing-a-custom-device-for-qemu/>
 - MMIO: <https://terenceli.github.io/%E6%8A%80%E6%9C%AF/2018/09/03/kvm-mmio>
 - Port IO: <https://terenceli.github.io/技术/2017/07/10/kvm-pio>
-- <https://github.com/u1f383/writeup/blob/main/learning/Qemu.md> (Good note about QEMU but mostly in Chinese, so I translated it to English and at my own, please view: [QEMU](./QEMU.md))
+- <https://github.com/u1f383/writeup/blob/main/learning/Qemu.md> (Good note about QEMU but mostly in Chinese, so I translated it to English and add some new stuffs, please view: [QEMU](./QEMU.md))
 - <https://phrack.org/issues/70/5> (QEMU Escape Study Case - Good for understanding QEMU vulnerabilities)
 - <https://richardweiyang-2.gitbook.io/understanding_qemu/> (Another QEMU note)
 - QEMU Escape Chanllenges:
