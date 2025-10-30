@@ -18,13 +18,11 @@ make -j$(nproc)
 
 ### Nouns
 
-- **Memory Mapped I/O (MMIO):** A method used by computers to perform input/output (I/O) operations by mapping device registers into the system's address space. This allows the CPU to communicate with hardware devices using standard memory access instructions.
-
-- **Port-Mapped I/O (PMIO):** Also known as isolated I/O, it is a method of performing input/output operations using a separate address space specifically designated for I/O devices. This allows the CPU to communicate with hardware devices using special I/O instructions.
+- **Memory Mapped I/O (MMIO) & Port-Mapped I/O (PMIO):** Memory-Mapped I/O (MMIO) is a method where device registers are mapped directly into the system’s main memory address space, allowing the CPU to communicate with hardware using standard memory access instructions, whereas Port-Mapped I/O (PMIO), also called isolated I/O, assigns devices a dedicated I/O address space that is accessed only through special I/O instructions (such as IN and OUT on x86), keeping memory and I/O operations logically separate. More explain [here](https://youtu.be/nnO2OfSTVbA?si=9CpsJflhlKxnTZkK&t=590)
 
 - **VirtIO:** A virtualization standard for network and disk device drivers where the guest's device driver "knows" it is running in a virtual environment, and cooperates with the hypervisor. Note in [VirtIO.md](./VirtIO.md).
 
-- **Direct Memory Access (DMA):** A feature that allows hardware devices to access the main system memory (RAM) directly, bypassing the CPU. This enables faster data transfer rates and reduces CPU overhead, improving overall system performance.
+- **Direct Memory Access (DMA):** A feature that allows hardware devices to access the main system memory (RAM) directly, bypassing the CPU. This enables faster data transfer rates and reduces CPU overhead, improving overall system performance. More explain [here](https://youtu.be/M16l_ymlfcs?si=srR7RRT2Luca1dkS)
 
 - **Base Address Registers (BARs):** are used in PCI and PCIe devices to define the memory or I/O address ranges that the device will use for communication with the system. Each BAR specifies a starting address and size for a specific region of memory or I/O space that the device can access.
 
@@ -956,9 +954,3 @@ static const MemoryRegionOps apic_io_ops = {
 ### Reference
 
 https://github.com/u1f383/writeup/blob/main/learning/Qemu.md
-<<<<<<< HEAD
-=======
-
-
-
->>>>>>> 3a7ead045f64061e9f3e7afcc6477fc2641fc28f
