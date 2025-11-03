@@ -5,18 +5,26 @@
 ### Full virtualization vs. paravirtualization
 
 **Full Virtualization:**
-    - The guest OS runs on top of a hypervisor.
-    - It doesn’t know it’s being virtualized — no changes are needed.
-    - The hypervisor emulates all hardware (like CPU, disk, or network).
-    - This gives high compatibility but is slower because emulation is heavy.
-    - Examples: VMware, VirtualBox, KVM (using emulation mode).
+- The guest OS runs on top of a hypervisor.
+    
+- It doesn’t know it’s being virtualized — no changes are needed.
+    
+- The hypervisor emulates all hardware (like CPU, disk, or network).
+    
+- This gives high compatibility but is slower because emulation is heavy.
+    
+- Examples: VMware, VirtualBox, KVM (using emulation mode).
 
 **Paravirtualization:**
-    - The guest OS knows it’s running inside a virtual machine.
-    - It includes special code (para-drivers) to talk directly with the hypervisor.
-    - This reduces emulation and makes performance faster.
-    - But it needs a modified OS that supports these para-drivers.
-    - Examples: Xen (with para mode), Hyper-V, virtio drivers in KVM.
+- The guest OS knows it’s running inside a virtual machine.
+
+- It includes special code (para-drivers) to talk directly with the hypervisor.
+
+- This reduces emulation and makes performance faster.
+
+- But it needs a modified OS that supports these para-drivers.
+
+- Examples: Xen (with para mode), Hyper-V, virtio drivers in KVM.
 
 **Device emulation in full virtualization and paravirtualization environments**
 
