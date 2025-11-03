@@ -734,7 +734,7 @@ struct AddressSpace {
 
 - `struct FlatView` stores the flattened `MemoryRegion`
 - `generate_memory_topology()` - render a memory topology into a list of disjoint absolute ranges
-    - render_memory_region() - render a memory region into the global view. Ranges in @view obscure
+    - `render_memory_region()` - render a memory region into the global view. Ranges in @view obscure
   - `flatview_add_to_dispatch()`:
     ```c
     /*
@@ -787,8 +787,8 @@ It is a wrapper that uses `object_initialize()` to initialize the object first, 
 ```c
 struct RAMBlock {
     struct rcu_head rcu;
-    struct MemoryRegion *mr;
-    uint8_t *host;
+    struct MemoryRegion *mr; /* Associated MemoryRegion */
+    uint8_t *host; /* Host Virtual Address (HVA) of the RAM block */
     uint8_t *colo_cache; /* For colo, VM's ram cache */
     ram_addr_t offset;
     ram_addr_t used_length;
