@@ -20,7 +20,7 @@
 
 **Device emulation in full virtualization and paravirtualization environments**
 
-![img](https://developer.ibm.com/developer/default/articles/l-virtio/images/figure1.gif)
+![img](./assets/img3.png)
 >Hardware continues to change with virtualization. New processors incorporate advanced instructions to make guest operating systems and hypervisor transitions more efficient. And hardware continues to change for input/output (I/O) virtualization, as well (see resources on the right to learn about Peripheral Controller Interconnect [PCI] passthrough and single- and multi-root I/O virtualization).
 
 In **full virtualization**, the guest OS doesn’t know it’s virtualized. The hypervisor traps and emulates hardware, which makes it slower but allows any OS to run.
@@ -37,14 +37,14 @@ The **front end** (runs in the guest) talks to the **back end** (runs in the hyp
 
 In practice, the back-end drivers often run in **QEMU user space**, handling I/O between the guest and the host hardware (like PCI host controller, disk, network, video hardware, USB controller, and other hardware elements).
 
-![[./assets/img1.png]]
+![img](./assets/img1.png)
 ### Virtio architecture
 
 Virtio connects the drivers inside the guest with the devices managed by the hypervisor. It uses virtual queues to pass data and commands back and forth between them.
 
 Each type of virtual device, like network, disk, console, or balloon, has its own virtio driver. For example, the virtio network driver uses two queues — one for sending and one for receiving data — while the block driver only needs one. These queues act like shared buffers that make communication between the guest and the hypervisor fast and efficient.
 
-![[img2.png]]
+![img](./assets/img2.png)
 > As shown above, five front-end drivers are listed for block devices (such as disks), network devices, PCI emulation, a balloon driver (for dynamically managing guest memory usage), and a console driver. Each front-end driver has a corresponding back-end driver in the hypervisor.
 
 Overall, virtio provides a common and flexible way for different virtual devices to communicate smoothly between the guest OS and the host system.
